@@ -108,27 +108,7 @@ bot.
 
 ## EasyPanel Deployment
 
-Create one EasyPanel App Service.
-
-1. Connect this GitHub repository as the source.
-2. Use the repository `Dockerfile`.
-3. Leave the default command from the Dockerfile:
-
-```bash
-simple-kirolets
-```
-
-4. Add the environment variables from `.env.example`.
-5. Deploy the service.
-6. Send `/start` to your Telegram bot.
-7. Send a text request, for example:
-
-```text
-Update the README with a short sentence saying this project is managed through Simple Kirolets.
-```
-
-This app uses Telegram polling, so you do not need to configure a public domain or Telegram
-webhook in EasyPanel.
+See the full [EasyPanel deployment guide](docs/easypanel-deployment.md).
 
 ## Persistent Git Cache
 
