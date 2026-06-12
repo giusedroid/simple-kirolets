@@ -9,18 +9,20 @@ from simple_kirolets.progress import progress_updates
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    del context
-
     if update.message is None:
+        return
+
+    if not await _authorize(update, context):
         return
 
     await update.message.reply_text("Simple Kirolets is online. Send me a text task for Kiro.")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    del context
-
     if update.message is None:
+        return
+
+    if not await _authorize(update, context):
         return
 
     await update.message.reply_text("Send a text message describing the code change you want.")
@@ -28,6 +30,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
+        return
+
+    if not await _authorize(update, context):
         return
 
     if update.message.voice is not None:
@@ -107,3 +112,19 @@ def _kiro_response_message(summary: str) -> str:
         response = f"{response[:max_length].rstrip()}\n...[truncated]"
 
     return f"Kiro response:\n\n{response}"
+
+
+async def _authorize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    settings: Settings = context.application.bot_data["settings"]
+    allowed_user_ids = settings.telegram_allowed_user_ids
+    if not allowed_user_ids:
+        return True
+
+    user_id = update.effective_user.id if update.effective_user is not None else None
+    if user_id in allowed_user_ids:
+        return True
+
+    if update.message is not None:
+        await update.message.reply_text("You are not allowed to use this bot.")
+
+    return False

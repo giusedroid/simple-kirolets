@@ -76,6 +76,7 @@ python -m compileall src tests
 
 ```env
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USER_IDS=
 LOG_LEVEL=INFO
 
 GITHUB_REPOSITORY_URL=
@@ -100,6 +101,10 @@ and create pull requests. For fine-grained GitHub tokens, start with:
 
 If `YOLO=true`, the token also needs permission to push directly to `GITHUB_BASE_BRANCH`,
 and branch protection may still block the push.
+
+Set `TELEGRAM_ALLOWED_USER_IDS` to a comma-separated list of numeric Telegram user IDs to
+restrict who can use the bot. Leave it empty to allow any Telegram user who can message the
+bot.
 
 ## EasyPanel Deployment
 

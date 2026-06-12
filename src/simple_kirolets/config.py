@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 @dataclass(frozen=True)
 class Settings:
     telegram_bot_token: str
+    telegram_allowed_user_ids: frozenset[int]
     github_repository_url: str
     github_token: str
     github_base_branch: str
@@ -24,6 +25,7 @@ def load_settings() -> Settings:
 
     return Settings(
         telegram_bot_token=_required_env("TELEGRAM_BOT_TOKEN"),
+        telegram_allowed_user_ids=_int_set_env("TELEGRAM_ALLOWED_USER_IDS"),
         github_repository_url=_required_env("GITHUB_REPOSITORY_URL"),
         github_token=_required_env("GITHUB_TOKEN"),
         github_base_branch=os.getenv("GITHUB_BASE_BRANCH", "main").strip() or "main",
@@ -69,3 +71,22 @@ def _bool_env(name: str, default: bool = False) -> bool:
         return False
 
     raise RuntimeError(f"{name} must be a boolean.")
+
+
+def _int_set_env(name: str) -> frozenset[int]:
+    raw_value = os.getenv(name, "").strip()
+    if not raw_value:
+        return frozenset()
+
+    values: set[int] = set()
+    for item in raw_value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+
+        try:
+            values.add(int(item))
+        except ValueError as exc:
+            raise RuntimeError(f"{name} must contain comma-separated integer IDs.") from exc
+
+    return frozenset(values)
