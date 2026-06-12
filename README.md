@@ -1,20 +1,24 @@
 # Simple Kirolets
 
-Simple Kirolets is the single-service teaching version of Kirolets.
+Simple Kirolets lets you control Kiro from Telegram.
 
-It lets a Telegram user send a text request, runs Kiro CLI headlessly against a configured
-GitHub repository, and then either opens a pull request or pushes directly to the base branch
-when `YOLO=true`.
+Send a text message to your Telegram bot, and Simple Kirolets runs Kiro CLI headlessly
+against a configured GitHub repository. When Kiro is done, the bot reports Kiro's response
+back to Telegram and either opens a pull request or pushes directly to the base branch when
+`YOLO=true`.
 
-This folder is intentionally standalone. It does not reuse the root Kirolets package and it
-does not require Redis, a separate worker service, or Amazon Transcribe.
+This project is intentionally small: one Docker image, one EasyPanel App Service, no Redis,
+no worker service, no webhooks, and no voice transcription. It is built for courses,
+workshops, and first deployments where the core productivity loop matters more than
+production topology.
 
 ## Architecture
 
 ```text
 Telegram text message
   -> simple-kirolets polling bot
-  -> temporary Git worktree from bare cache
+  -> bare Git cache
+  -> temporary Git worktree
   -> Kiro CLI implementation pass
   -> Git commit
   -> Kiro CLI PR-description pass
@@ -22,46 +26,50 @@ Telegram text message
   -> Telegram result message
 ```
 
-## What This Version Teaches
+## Features
 
-- Telegram polling.
-- Environment-driven configuration.
-- Headless Kiro CLI usage.
-- Bare Git cache plus temporary worktrees.
-- GitHub PR creation with the REST API.
-- Optional `YOLO=true` direct-to-base-branch mode.
-- Single EasyPanel App Service deployment.
+- Telegram polling, so no public webhook URL is required.
+- Text-only requests for a simpler first learning path.
+- Headless Kiro CLI execution.
+- Bare Git cache to avoid recloning the target repo for every request.
+- Temporary per-request Git worktrees.
+- GitHub PR creation through the GitHub REST API.
+- Kiro-generated PR title and description.
+- Optional `YOLO=true` direct-push mode.
+- Single-service Docker/EasyPanel deployment.
 
 ## Requirements
 
 - uv
 - Python 3.14
 - A Telegram bot token from BotFather
-- A GitHub token for the target repo
+- A GitHub token for the repository Kiro will edit
 - A Kiro API key
 
 ## Local Setup
 
 ```powershell
-cd simple
 uv python install 3.14
 uv sync --dev
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and set the required secrets.
+Edit `.env` and set the required values.
 
-## Run
+## Run Locally
 
 ```powershell
 uv run simple-kirolets
 ```
+
+Then send a text message to your Telegram bot.
 
 ## Test
 
 ```powershell
 uv run pytest
 uv run ruff check .
+python -m compileall src tests
 ```
 
 ## Environment Variables
@@ -83,25 +91,57 @@ PROGRESS_UPDATE_INTERVAL_SECONDS=30
 YOLO=false
 ```
 
-## EasyPanel Single-Service Deployment
+`GITHUB_TOKEN` needs enough permission to clone/fetch repository contents, push branches,
+and create pull requests. For fine-grained GitHub tokens, start with:
 
-Create one EasyPanel App Service:
+- Contents: read/write
+- Pull requests: read/write
+- Metadata: read
 
-1. Select the GitHub repository as the source.
-2. Set the build context or Dockerfile path to the `simple` folder if EasyPanel exposes that option.
-3. Build with `simple/Dockerfile`.
-4. Use the default command:
+If `YOLO=true`, the token also needs permission to push directly to `GITHUB_BASE_BRANCH`,
+and branch protection may still block the push.
+
+## EasyPanel Deployment
+
+Create one EasyPanel App Service.
+
+1. Connect this GitHub repository as the source.
+2. Use the repository `Dockerfile`.
+3. Leave the default command from the Dockerfile:
 
 ```bash
 simple-kirolets
 ```
 
-5. Add the environment variables from `.env.example`.
-6. Deploy the service.
-7. Message the Telegram bot with a text request.
+4. Add the environment variables from `.env.example`.
+5. Deploy the service.
+6. Send `/start` to your Telegram bot.
+7. Send a text request, for example:
 
-This version uses Telegram polling, so you do not need to configure a public domain or webhook
-for the bot.
+```text
+Update the README with a short sentence saying this project is managed through Simple Kirolets.
+```
+
+This app uses Telegram polling, so you do not need to configure a public domain or Telegram
+webhook in EasyPanel.
+
+## Persistent Git Cache
+
+Simple Kirolets stores a bare Git cache at `GIT_CACHE_DIR`. For EasyPanel, mount a volume
+if you want that cache to survive redeploys:
+
+```text
+Mount path: /app/.simple-kirolets
+```
+
+Then set:
+
+```env
+GIT_CACHE_DIR=/app/.simple-kirolets/git-cache
+```
+
+Without a persistent volume, the app still works; it just rebuilds the Git cache when the
+container is replaced.
 
 ## YOLO Mode
 
@@ -111,7 +151,7 @@ Default mode:
 YOLO=false
 ```
 
-Kirolets pushes a request branch and opens a GitHub PR.
+Simple Kirolets pushes a request branch and opens a GitHub PR.
 
 YOLO mode:
 
@@ -119,19 +159,17 @@ YOLO mode:
 YOLO=true
 ```
 
-Kirolets commits Kiro's changes and pushes directly to `GITHUB_BASE_BRANCH`.
+Simple Kirolets commits Kiro's changes and pushes directly to `GITHUB_BASE_BRANCH`.
 
-Use YOLO mode only in repositories where direct bot commits are acceptable. GitHub branch
-protection can still reject direct pushes.
+Use YOLO mode only in repositories where direct bot commits are acceptable.
 
-## From Simple To Full Kirolets
+## Teaching Path
 
-This project is deliberately simple for learners. The full root project adds:
+This project is the first rung:
 
-- Redis queueing.
-- Separate bot and worker services.
-- Voice-note transcription with S3 and Amazon Transcribe.
-- Better production scaling boundaries.
+```text
+Telegram message -> Kiro CLI -> Git branch/PR -> Telegram reply
+```
 
-Start here to understand the loop. Graduate to the root project when the learner is ready
-to see how the same idea becomes a more production-shaped system.
+Once learners understand this loop, the production Kirolets architecture can add Redis,
+separate bot and worker services, voice-note transcription, and webhooks.
