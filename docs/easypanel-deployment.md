@@ -90,6 +90,8 @@ incoming `effective_user.id` during development.
 ```env
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
+GITHUB_USERNAME=
+GITHUB_EMAIL=
 GITHUB_BASE_BRANCH=main
 GIT_CACHE_DIR=/app/.simple-kirolets/git-cache
 ```
@@ -102,6 +104,10 @@ GITHUB_REPOSITORY_URL=https://github.com/your-org/your-repo.git
 
 `GITHUB_REPOSITORY_URL` is the repository Kiro will modify. It can be the same repo as
 Simple Kirolets, but it is usually the learner's target project.
+
+`GITHUB_USERNAME` and `GITHUB_EMAIL` are configured as `git config user.name` and
+`git config user.email` before each commit. Without them, containerized commits can fail
+with Git's author identity error.
 
 ### Kiro
 
@@ -140,6 +146,8 @@ LOG_LEVEL=INFO
 
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
+GITHUB_USERNAME=
+GITHUB_EMAIL=
 GITHUB_BASE_BRANCH=main
 GIT_CACHE_DIR=/app/.simple-kirolets/git-cache
 
