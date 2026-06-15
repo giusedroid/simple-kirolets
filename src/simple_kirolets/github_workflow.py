@@ -70,6 +70,7 @@ class GitHubWorkflow:
                     )
 
                 await self._git("add", "-A", cwd=repo_dir)
+                await self._configure_git_identity(repo_dir)
                 await self._git("commit", "-m", self._commit_message(request_text), cwd=repo_dir)
 
                 if self._settings.yolo:
@@ -214,6 +215,10 @@ class GitHubWorkflow:
     async def _has_changes(self, repo_dir: str) -> bool:
         output = await self._git("status", "--porcelain", cwd=repo_dir)
         return bool(output.strip())
+
+    async def _configure_git_identity(self, repo_dir: str) -> None:
+        await self._git("config", "user.name", self._settings.github_username, cwd=repo_dir)
+        await self._git("config", "user.email", self._settings.github_email, cwd=repo_dir)
 
     async def _git(self, *args: str, cwd: str) -> str:
         return await self._run_command("git", *args, cwd=cwd, timeout=300)

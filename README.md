@@ -81,6 +81,8 @@ LOG_LEVEL=INFO
 
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
+GITHUB_USERNAME=
+GITHUB_EMAIL=
 GITHUB_BASE_BRANCH=main
 GIT_CACHE_DIR=.simple-kirolets/git-cache
 
@@ -101,6 +103,10 @@ and create pull requests. For fine-grained GitHub tokens, start with:
 
 If `YOLO=true`, the token also needs permission to push directly to `GITHUB_BASE_BRANCH`,
 and branch protection may still block the push.
+
+`GITHUB_USERNAME` and `GITHUB_EMAIL` are used as the Git commit identity inside temporary
+worktrees. Set them to a real GitHub username and email, or a GitHub no-reply email, so
+`git commit` works inside containers.
 
 Set `TELEGRAM_ALLOWED_USER_IDS` to a comma-separated list of numeric Telegram user IDs to
 restrict who can use the bot. Leave it empty to allow any Telegram user who can message the

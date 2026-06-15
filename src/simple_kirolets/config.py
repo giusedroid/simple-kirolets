@@ -10,6 +10,8 @@ class Settings:
     telegram_allowed_user_ids: frozenset[int]
     github_repository_url: str
     github_token: str
+    github_username: str
+    github_email: str
     github_base_branch: str
     git_cache_dir: str
     kiro_api_key: str
@@ -28,6 +30,8 @@ def load_settings() -> Settings:
         telegram_allowed_user_ids=_int_set_env("TELEGRAM_ALLOWED_USER_IDS"),
         github_repository_url=_required_env("GITHUB_REPOSITORY_URL"),
         github_token=_required_env("GITHUB_TOKEN"),
+        github_username=_required_env("GITHUB_USERNAME"),
+        github_email=_required_env("GITHUB_EMAIL"),
         github_base_branch=os.getenv("GITHUB_BASE_BRANCH", "main").strip() or "main",
         git_cache_dir=os.getenv("GIT_CACHE_DIR", "").strip() or ".simple-kirolets/git-cache",
         kiro_api_key=_required_env("KIRO_API_KEY"),
