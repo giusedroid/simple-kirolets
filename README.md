@@ -72,25 +72,59 @@ flowchart TD
 
 ## Local Setup
 
-```powershell
+```bash
 uv python install 3.14
 uv sync --dev
-Copy-Item .env.example .env
+cp .env.example .env
 ```
 
 Edit `.env` and set the required values.
 
 ## Run Locally
 
-```powershell
+```bash
 uv run simple-kirolets
 ```
 
 Then send a text message to your Telegram bot.
 
+## Run With Docker
+
+Build the image:
+
+```bash
+docker build -t simple-kirolets:local .
+```
+
+Start the bot with your local `.env` file and a persistent Git cache volume:
+
+```bash
+mkdir -p .simple-kirolets
+docker run -d --rm \
+  --env-file .env \
+  -v "$(pwd)/.simple-kirolets:/app/.simple-kirolets" \
+  --name simple-kirolets-local \
+  simple-kirolets:local
+```
+
+Follow logs:
+
+```bash
+docker logs --tail 100 -f simple-kirolets-local
+```
+
+Stop the bot:
+
+```bash
+docker stop simple-kirolets-local
+```
+
+Only run one container or local process for a Telegram bot token at a time. Telegram polling
+allows one active `getUpdates` consumer per bot.
+
 ## Test
 
-```powershell
+```bash
 uv run pytest
 uv run ruff check .
 python -m compileall src tests
