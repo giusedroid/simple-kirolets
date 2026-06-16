@@ -1,5 +1,7 @@
 # Simple Kirolets
 
+![Simple Kirolets banner](assets/simple-kirolets-banner.png)
+
 Simple Kirolets lets you control Kiro from Telegram.
 
 Send a text message to your Telegram bot, and Simple Kirolets runs Kiro CLI headlessly
@@ -14,16 +16,38 @@ production topology.
 
 ## Architecture
 
-```text
-Telegram text message
-  -> simple-kirolets polling bot
-  -> bare Git cache
-  -> temporary Git worktree
-  -> Kiro CLI implementation pass
-  -> Git commit
-  -> Kiro CLI PR-description pass
-  -> GitHub PR or YOLO direct push
-  -> Telegram result message
+Simple Kirolets runs as one process in one container. The bot polls Telegram, performs the
+Kiro/Git workflow synchronously, then replies to the same chat.
+
+```mermaid
+flowchart TD
+    User["Telegram user"] -->|"Text task"| Telegram["Telegram Bot API"]
+    Telegram -->|"Polling getUpdates"| App["Simple Kirolets container"]
+
+    subgraph AppBox["Single EasyPanel App Service"]
+        App --> Auth["Allow-list check"]
+        Auth --> Cache["Bare Git cache"]
+        Cache --> Worktree["Temporary Git worktree"]
+        Worktree --> KiroRun["Kiro CLI implementation pass"]
+        KiroRun --> ResponseFile["/tmp/kiro-response.md"]
+        KiroRun --> GitChanges{"Files changed?"}
+        GitChanges -->|"No"| Reply["Format Telegram HTML response"]
+        GitChanges -->|"Yes"| Commit["Git commit"]
+        Commit --> PRDesc["Kiro CLI PR-description pass"]
+        PRDesc --> Publish{"YOLO mode?"}
+    end
+
+    GitHub["GitHub repository"] -->|"Fetch / clone"| Cache
+    Publish -->|"YOLO=false"| PullRequest["Open pull request"]
+    Publish -->|"YOLO=true"| PushMain["Push to base branch"]
+    PullRequest --> GitHub
+    PushMain --> GitHub
+
+    ResponseFile --> Reply
+    PullRequest --> Reply
+    PushMain --> Reply
+    Reply -->|"sendMessage"| Telegram
+    Telegram --> User
 ```
 
 ## Features
