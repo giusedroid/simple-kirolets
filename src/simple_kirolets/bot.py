@@ -1,6 +1,10 @@
+import asyncio
+import html
 import logging
+import re
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from simple_kirolets.config import Settings, load_settings
@@ -60,7 +64,10 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         ):
             result = await workflow.execute(request_text, _user_label(update))
 
-        await update.message.reply_text(_kiro_response_message(result.kiro_response))
+        await update.message.reply_text(
+            _kiro_response_message(result.kiro_response, result.usage_report),
+            parse_mode=ParseMode.HTML,
+        )
 
         if result.changed and result.pushed_to_base:
             await update.message.reply_text(
@@ -91,8 +98,16 @@ def build_application() -> Application:
 
 
 def main() -> None:
+    _ensure_event_loop()
     application = build_application()
     application.run_polling(allowed_updates=["message"])
+
+
+def _ensure_event_loop() -> None:
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 def _user_label(update: Update) -> str:
@@ -105,13 +120,52 @@ def _user_label(update: Update) -> str:
     return str(update.effective_user.id)
 
 
-def _kiro_response_message(summary: str) -> str:
+def _kiro_response_message(summary: str, usage_report: str | None = None) -> str:
     response = summary.strip() or "Kiro finished without returning a response."
     max_length = 3500
     if len(response) > max_length:
         response = f"{response[:max_length].rstrip()}\n...[truncated]"
 
-    return f"Kiro response:\n\n{response}"
+    message = f"<b>Kiro response</b>\n\n{_markdown_to_telegram_html(response)}"
+    if usage_report:
+        message = f"{message}\n\n<i>{html.escape(usage_report)}</i>"
+    else:
+        message = f"{message}\n\n<i>Usage: not reported by Kiro CLI</i>"
+
+    return message
+
+
+def _markdown_to_telegram_html(markdown: str) -> str:
+    lines: list[str] = []
+    for raw_line in markdown.splitlines():
+        line = raw_line.strip()
+        if not line:
+            lines.append("")
+            continue
+
+        if set(line) <= {"-"}:
+            continue
+
+        heading_match = re.match(r"^#{1,6}\s+(.+)$", line)
+        if heading_match:
+            lines.append(f"<b>{_inline_markdown_to_html(heading_match.group(1))}</b>")
+            continue
+
+        bullet_match = re.match(r"^[-*]\s+(.+)$", line)
+        if bullet_match:
+            lines.append(f"• {_inline_markdown_to_html(bullet_match.group(1))}")
+            continue
+
+        lines.append(_inline_markdown_to_html(line))
+
+    return "\n".join(lines).strip()
+
+
+def _inline_markdown_to_html(text: str) -> str:
+    escaped = html.escape(text)
+    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+    escaped = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", escaped)
+    return escaped
 
 
 async def _authorize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:

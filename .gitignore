@@ -8,3 +8,4 @@ __pycache__/
 .simple-kirolets/
 dist/
 build/
+.docker-config/

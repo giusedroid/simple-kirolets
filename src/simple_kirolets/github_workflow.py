@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
@@ -20,6 +21,7 @@ class WorkflowResult:
     pushed_to_base: bool
     changed: bool
     kiro_response: str
+    usage_report: str | None
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class GitHubWorkflow:
     async def execute(self, request_text: str, user_label: str) -> WorkflowResult:
         async with _temporary_directory() as workspace:
             repo_dir = os.path.join(workspace, "repo")
+            response_path = os.path.join(workspace, "kiro-response.md")
             branch_name = self._branch_name(user_label)
             bare_repo_dir = await self._prepare_bare_repo_cache()
 
@@ -52,12 +55,14 @@ class GitHubWorkflow:
                 "-b",
                 branch_name,
                 repo_dir,
-                f"origin/{self._settings.github_base_branch}",
+                self._base_ref(),
                 cwd=workspace,
             )
 
             try:
-                kiro_output = await self._run_kiro(repo_dir, request_text)
+                kiro_output = await self._run_kiro(repo_dir, request_text, response_path)
+                kiro_response = await self._read_kiro_response(response_path, kiro_output)
+                usage_report = self._extract_usage_report(kiro_output)
                 changed = await self._has_changes(repo_dir)
 
                 if not changed:
@@ -66,7 +71,8 @@ class GitHubWorkflow:
                         pr_url=None,
                         pushed_to_base=False,
                         changed=False,
-                        kiro_response=self._summarize_output(kiro_output),
+                        kiro_response=kiro_response,
+                        usage_report=usage_report,
                     )
 
                 await self._git("add", "-A", cwd=repo_dir)
@@ -85,7 +91,8 @@ class GitHubWorkflow:
                         pr_url=None,
                         pushed_to_base=True,
                         changed=True,
-                        kiro_response=self._summarize_output(kiro_output),
+                        kiro_response=kiro_response,
+                        usage_report=usage_report,
                     )
 
                 pr_description = await self._generate_pull_request_description(
@@ -102,7 +109,8 @@ class GitHubWorkflow:
                     pr_url=pr_url,
                     pushed_to_base=False,
                     changed=True,
-                    kiro_response=self._summarize_output(kiro_output),
+                    kiro_response=kiro_response,
+                    usage_report=usage_report,
                 )
             finally:
                 await self._remove_worktree(bare_repo_dir, repo_dir)
@@ -167,20 +175,36 @@ class GitHubWorkflow:
         except WorkflowError:
             return
 
-    async def _run_kiro(self, repo_dir: str, prompt: str) -> str:
+    async def _run_kiro(
+        self,
+        repo_dir: str,
+        prompt: str,
+        response_path: str | None = None,
+    ) -> str:
         env = os.environ.copy()
         env["KIRO_API_KEY"] = self._settings.kiro_api_key
+        env["NO_COLOR"] = "1"
+        env["TERM"] = "dumb"
 
         return await self._run_command(
             "kiro-cli",
             "chat",
             "--no-interactive",
             f"--trust-tools={self._settings.kiro_trust_tools}",
-            prompt,
+            self._kiro_prompt(prompt, response_path),
             cwd=repo_dir,
             env=env,
             timeout=self._settings.kiro_timeout_seconds,
         )
+
+    async def _read_kiro_response(self, response_path: str, kiro_output: str) -> str:
+        try:
+            with open(response_path, encoding="utf-8") as response_file:
+                response = response_file.read()
+        except OSError:
+            return self._summarize_output(kiro_output)
+
+        return self._summarize_output(response)
 
     async def _generate_pull_request_description(
         self,
@@ -192,13 +216,13 @@ class GitHubWorkflow:
         git_log = await self._git(
             "log",
             "--oneline",
-            f"origin/{self._settings.github_base_branch}..HEAD",
+            f"{self._base_ref()}..HEAD",
             cwd=repo_dir,
         )
         git_diff = await self._git(
             "diff",
             "--stat",
-            f"origin/{self._settings.github_base_branch}..HEAD",
+            f"{self._base_ref()}..HEAD",
             cwd=repo_dir,
         )
         prompt = self._pr_description_prompt(request_text, git_log, git_diff, kiro_output)
@@ -227,7 +251,7 @@ class GitHubWorkflow:
         return await self._run_command(
             "git",
             "-c",
-            f"http.extraheader=AUTHORIZATION: Bearer {self._settings.github_token}",
+            f"http.https://github.com/.extraheader={self._github_auth_header()}",
             *args,
             cwd=cwd,
             timeout=300,
@@ -379,18 +403,53 @@ class GitHubWorkflow:
         return PullRequestDescription(title=title, body=body)
 
     def _truncate_for_prompt(self, text: str, max_length: int = 6000) -> str:
-        cleaned = text.strip()
+        cleaned = self._clean_output(text)
         if len(cleaned) <= max_length:
             return cleaned
 
         return f"{cleaned[:max_length]}\n...[truncated]"
 
     def _summarize_output(self, output: str) -> str:
-        cleaned = output.strip()
-        if len(cleaned) <= 2000:
+        cleaned = self._clean_output(output)
+        if len(cleaned) <= 1200:
             return cleaned
 
-        return f"{cleaned[:2000]}\n...[truncated]"
+        return f"{cleaned[:1200]}\n...[truncated]"
+
+    def _extract_usage_report(self, output: str) -> str | None:
+        cleaned = self._clean_output(output)
+        usage_patterns = (
+            ("Credits used", r"\bcredits?\s+used\s*[:=]\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b"),
+            ("Credits used", r"\bused\s+([0-9][0-9,]*(?:\.[0-9]+)?)\s+credits?\b"),
+            ("Credits used", r"\b([0-9][0-9,]*(?:\.[0-9]+)?)\s+credits?\s+used\b"),
+            ("Tokens used", r"\btokens?\s+used\s*[:=]\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b"),
+            ("Tokens used", r"\bused\s+([0-9][0-9,]*(?:\.[0-9]+)?)\s+tokens?\b"),
+            ("Tokens used", r"\b([0-9][0-9,]*(?:\.[0-9]+)?)\s+tokens?\s+used\b"),
+        )
+        for label, pattern in usage_patterns:
+            match = re.search(pattern, cleaned, flags=re.IGNORECASE)
+            if match:
+                return f"{label}: {match.group(1)}"
+
+        return None
+
+    def _kiro_prompt(self, prompt: str, response_path: str | None) -> str:
+        if response_path is None:
+            return prompt
+
+        return (
+            f"{prompt}\n\n"
+            "When you are finished, write a concise user-facing response as Markdown to this "
+            f"exact absolute path: {response_path}\n\n"
+            "The response file must contain only the meaningful result for the Telegram user. "
+            "Do not include tool logs, terminal output, ANSI codes, file-read traces, or internal "
+            "reasoning. Keep it under 1,200 characters. Mention whether files were changed, "
+            "what the user should review, and any important caveats."
+        )
+
+    def _clean_output(self, output: str) -> str:
+        without_ansi = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
+        return without_ansi.strip()
 
     def _short_text(self, text: str, max_length: int) -> str:
         normalized = " ".join(text.split())
@@ -400,7 +459,21 @@ class GitHubWorkflow:
         return normalized[: max_length - 3].rstrip() + "..."
 
     def _redact(self, text: str) -> str:
-        return text.replace(self._settings.github_token, "***").replace(self._settings.kiro_api_key, "***")
+        return (
+            text.replace(self._settings.github_token, "***")
+            .replace(self._github_basic_credential(), "***")
+            .replace(self._settings.kiro_api_key, "***")
+        )
+
+    def _github_auth_header(self) -> str:
+        return f"AUTHORIZATION: Basic {self._github_basic_credential()}"
+
+    def _github_basic_credential(self) -> str:
+        credential = f"x-access-token:{self._settings.github_token}".encode()
+        return base64.b64encode(credential).decode()
+
+    def _base_ref(self) -> str:
+        return self._settings.github_base_branch
 
 
 class _temporary_directory:

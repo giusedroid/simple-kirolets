@@ -14,6 +14,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         git \
+        unzip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://cli.kiro.dev/install | bash \
