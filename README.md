@@ -170,6 +170,117 @@ Set `TELEGRAM_ALLOWED_USER_IDS` to a comma-separated list of numeric Telegram us
 restrict who can use the bot. Leave it empty to allow any Telegram user who can message the
 bot.
 
+## FAQ: Getting Tokens And IDs
+
+### How do I get a Kiro API key?
+
+Simple Kirolets runs Kiro CLI in headless mode, so it needs `KIRO_API_KEY`.
+
+1. Sign in to [app.kiro.dev](https://app.kiro.dev).
+2. Use a Kiro Pro, Pro+, Pro Max, or Power account. API key authentication is only available
+   on those plans.
+3. Open the API Keys section.
+4. Create a new API key.
+5. Copy it immediately. The full key is shown only when it is created.
+6. Put it in `.env`:
+
+```env
+KIRO_API_KEY=ksk_xxxxxxxx
+```
+
+Kiro API keys are long-lived credentials. Store them like passwords, rotate them regularly,
+and revoke them if they are ever exposed.
+
+### How do I get a GitHub personal access token?
+
+Simple Kirolets uses `GITHUB_TOKEN` to clone the target repository, push request branches,
+and open pull requests.
+
+Prefer a fine-grained personal access token:
+
+1. Open GitHub.
+2. Go to Settings.
+3. Go to Developer settings.
+4. Open Personal access tokens.
+5. Choose Fine-grained tokens.
+6. Generate a new token.
+7. Select the owner and only the repository Kiro should edit.
+8. Grant these repository permissions:
+   - Metadata: read
+   - Contents: read/write
+   - Pull requests: read/write
+9. Set an expiration.
+10. Copy the token into `.env`:
+
+```env
+GITHUB_TOKEN=github_pat_xxxxxxxx
+```
+
+If `YOLO=true`, the token also needs permission to push directly to `GITHUB_BASE_BRANCH`,
+and branch protection may still reject the push.
+
+### How do I get a Telegram bot token?
+
+`TELEGRAM_BOT_TOKEN` belongs to the bot, not to your personal Telegram account.
+
+1. Open Telegram.
+2. Start a chat with [@BotFather](https://t.me/BotFather).
+3. Send `/newbot`.
+4. Follow the prompts to choose a bot name and username.
+5. BotFather gives you a token.
+6. Put it in `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=1234567890:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Treat the bot token like a password. If it leaks, revoke it in BotFather and create a new
+one.
+
+### How do I get my Telegram user ID?
+
+`TELEGRAM_ALLOWED_USER_IDS` is not your phone number and not your `@username`. It is a
+numeric Telegram account ID.
+
+The quickest beginner-friendly option is:
+
+1. Open Telegram.
+2. Search for `@userinfobot`.
+3. Start it.
+4. Copy the numeric `id` it shows.
+5. Put it in `.env`:
+
+```env
+TELEGRAM_ALLOWED_USER_IDS=123456789
+```
+
+You can also use your own bot:
+
+1. Start Simple Kirolets with `TELEGRAM_ALLOWED_USER_IDS` empty.
+2. Send a message to your bot.
+3. Temporarily inspect the incoming Telegram update with the Bot API:
+
+```bash
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates"
+```
+
+Look for:
+
+```json
+"from": {
+  "id": 123456789
+}
+```
+
+Then set `TELEGRAM_ALLOWED_USER_IDS` to that number and restart the bot.
+
+### Should I paste tokens into chat, GitHub issues, or course comments?
+
+No. Put secrets directly in `.env` or in your deployment platform's secret/environment
+variable UI.
+
+If a token is pasted somewhere public or semi-public, rotate it immediately.
+
 ## EasyPanel Deployment
 
 See the full [EasyPanel deployment guide](docs/easypanel-deployment.md).
