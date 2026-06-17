@@ -333,3 +333,12 @@ Telegram message -> Kiro CLI -> Git branch/PR -> Telegram reply
 
 Once learners understand this loop, the production Kirolets architecture can add Redis,
 separate bot and worker services, voice-note transcription, and webhooks.
+
+## Next: Service-Oriented Kirolets
+
+This repository is intentionally simple. The more production-oriented version lives in
+[Kirolets](https://github.com/giusedroid/Kirolets).
+
+That project is where the architecture can evolve toward a service-oriented ECS deployment:
+separate bot/API/worker responsibilities, queue-backed execution, stronger tenancy controls,
+voice transcription, and a clearer path toward paid production infrastructure.
